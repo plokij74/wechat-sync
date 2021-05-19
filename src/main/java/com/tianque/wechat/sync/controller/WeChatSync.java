@@ -1,9 +1,20 @@
 package com.tianque.wechat.sync.controller;
 
+import cn.hutool.http.HttpUtil;
+import cn.hutool.json.JSONObject;
+import cn.hutool.json.XML;
+import com.tianque.wechat.sync.constant.CommonConstant;
 import com.tianque.wechat.sync.util.AesException;
 import com.tianque.wechat.sync.util.WXBizMsgCrypt;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * @author: wuzhiwei
@@ -14,8 +25,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class WeChatSync {
 
+    private final Logger logger = LoggerFactory.getLogger(this.getClass());
+
     /***
-     * 微信回调函数
+     * 微信接口验证
      * @param msg_signature
      * @param timestamp
      * @param nonce
@@ -23,23 +36,14 @@ public class WeChatSync {
      * @return
      * @throws AesException
      */
-    @RequestMapping(value = "/syncPoints")
-    public String messageSend(String msg_signature, String timestamp, String nonce, String echostr) throws AesException {
+    @RequestMapping(value = "/syncPoints", method = {RequestMethod.GET})
+    public String checkUrl(String msg_signature, String timestamp, String nonce, String echostr) throws AesException {
         String sToken = "loNSttvI1aWowl99u5scy4oU";
         String sCorpID = "wwba3b94c5c0bb7ccf";
-        String sEncodingAESKey = "mwRD8LRcEE4DcimysrBDMs2d1d3ydnJhzVnRAICdRDO";
+        String sEncodingAESKey = "I5rjM4OCyRLYdhkiMolWLSQVmcxj8nskkAHPLbAmoPC";
 
         WXBizMsgCrypt wxcpt = new WXBizMsgCrypt(sToken, sEncodingAESKey, sCorpID);
-
-        // 解析出url上的参数值如下：
-        // String sVerifyMsgSig = HttpUtils.ParseUrl("msg_signature");
-        String sVerifyMsgSig = "5c45ff5e21c57e6ad56bac8758b79b1d9ac89fd3";
-        // String sVerifyTimeStamp = HttpUtils.ParseUrl("timestamp");
-        String sVerifyTimeStamp = "1409659589";
-        // String sVerifyNonce = HttpUtils.ParseUrl("nonce");
-        String sVerifyNonce = "263014780";
-        // String sVerifyEchoStr = HttpUtils.ParseUrl("echostr");
-        String sVerifyEchoStr = "P9nAzCzyDtyTWESHep1vC5X9xho/qYX3Zpb4yKa9SKld1DsH3Iyt3tP3zNdtp+4RPcs8TgAE7OaBO+FZXvnaqQ==";
+//        if (StrUtil.isEmpty(reqData)) {
         String sEchoStr; //需要返回的明文
         try {
             sEchoStr = wxcpt.VerifyURL(msg_signature, timestamp,
@@ -48,8 +52,37 @@ public class WeChatSync {
 //             验证URL成功，将sEchoStr返回
             return sEchoStr;
         } catch (Exception e) {
-            //验证URL失败，错误原因请查看异常
-            e.printStackTrace();
+            logger.error("签名校验失败", e);
+        }
+//        } else {
+//
+//        }
+        return "";
+    }
+
+    /***
+     * 微信回调函数
+     * @return
+     * @throws AesException
+     */
+    @RequestMapping(value = "/syncPoints", method = RequestMethod.POST)
+    public String syncPoints(String msg_signature, String timestamp, String nonce, @RequestBody String reqData) throws AesException {
+        String sToken = "loNSttvI1aWowl99u5scy4oU";
+        String sCorpID = "wwba3b94c5c0bb7ccf";
+        String sEncodingAESKey = "I5rjM4OCyRLYdhkiMolWLSQVmcxj8nskkAHPLbAmoPC";
+        WXBizMsgCrypt wxcpt = new WXBizMsgCrypt(sToken, sEncodingAESKey, sCorpID);
+        String xmlData = wxcpt.DecryptMsg(msg_signature, timestamp, nonce, reqData);
+        JSONObject xmlJSONObj = XML.toJSONObject(xmlData).getJSONObject("xml");
+        if (CommonConstant.LOCATION_EVENT.equals(xmlJSONObj.get(CommonConstant.EVENT))) {
+            Map<String, Object> param = new HashMap<>();
+            param.put("userName", xmlJSONObj.get(CommonConstant.FROMUSERNAME));
+            param.put("centerLon", xmlJSONObj.get(CommonConstant.LONGITUDE));
+            param.put("centerLat", xmlJSONObj.get(CommonConstant.LATITUDE));
+            param.put("originTime", xmlJSONObj.get(CommonConstant.CREATETIME));
+            HttpUtil.get(CommonConstant.GIS_URL, param);
+            logger.info("用户名：" + xmlJSONObj.get(CommonConstant.FROMUSERNAME) +
+                    ",上传坐标lon:" + xmlJSONObj.get(CommonConstant.LONGITUDE) +
+                    ",lat:" + xmlJSONObj.get(CommonConstant.LATITUDE));
         }
         return "";
     }
