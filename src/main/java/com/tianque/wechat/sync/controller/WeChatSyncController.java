@@ -23,7 +23,7 @@ import java.util.Map;
  */
 @RequestMapping("/weChatSync")
 @RestController
-public class WeChatSync {
+public class WeChatSyncController {
 
     private final Logger logger = LoggerFactory.getLogger(this.getClass());
 
